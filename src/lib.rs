@@ -60,7 +60,7 @@ pub const HEADER_BYTES: usize = 16;
 /// the way the kernel's own scan counts them.
 pub const TRANSPORT_VIRTIO_MEMORY_MAPPED_IO: u32 = 0;
 
-/// A virtio-blk function on the `PCIe` bus (the virtio specification's PCI transport).
+/// A virtio-blk function on the `PCIe` bus (the virtio specification's Peripheral Component Interconnect (PCI) transport).
 pub const TRANSPORT_VIRTIO_PCI: u32 = 1;
 
 /// An `NVMe` controller on the `PCIe` bus, found by its class code: the ordinal is its position among
