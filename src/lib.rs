@@ -122,15 +122,15 @@ pub const fn capacity_of(len: usize) -> usize {
 /// # Examples
 ///
 /// ```
-/// # use block_roster::{Device, Roster, TRANSPORT_NON_VOLATILE_MEMORY_EXPRESS};
-/// # use block_roster::{TRANSPORT_VIRTIO_MEMORY_MAPPED_IO, TRANSPORT_VIRTIO_PCI};
+/// # use block_roster_contract::{Device, Roster, TRANSPORT_NON_VOLATILE_MEMORY_EXPRESS};
+/// # use block_roster_contract::{TRANSPORT_VIRTIO_MEMORY_MAPPED_IO, TRANSPORT_VIRTIO_PCI};
 /// let mut page = [0u8; 4096];
 /// let devices = [
 ///     Device { ordinal: 0, transport: TRANSPORT_VIRTIO_MEMORY_MAPPED_IO },
 ///     Device { ordinal: 0, transport: TRANSPORT_VIRTIO_PCI },
 ///     Device { ordinal: 0, transport: TRANSPORT_NON_VOLATILE_MEMORY_EXPRESS },
 /// ];
-/// block_roster::write(&mut page, &devices).unwrap();
+/// block_roster_contract::write(&mut page, &devices).unwrap();
 ///
 /// let roster = Roster::read(&page).unwrap();
 /// assert_eq!(roster.len(), 3);

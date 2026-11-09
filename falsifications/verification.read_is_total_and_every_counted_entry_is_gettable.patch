@@ -1,4 +1,4 @@
-Falsifies `block_roster::read_is_total_and_every_counted_entry_is_gettable`.
+Falsifies `block_roster_contract::read_is_total_and_every_counted_entry_is_gettable`.
 
 The defect: `Roster::get` bounds its index with `i > self.count` instead of
 `i >= self.count`, the off-by-one a reader writes when it thinks of `count` as a
