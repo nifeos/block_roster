@@ -1,9 +1,9 @@
-# block_roster
+# block_roster_contract
 
-[![check](https://github.com/nifeos/block_roster/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/nifeos/block_roster/actions/workflows/ci.yml?query=branch%3Amain)
-[![proofs](https://github.com/nifeos/block_roster/actions/workflows/proofs.yml/badge.svg?branch=main)](https://github.com/nifeos/block_roster/actions/workflows/proofs.yml?query=branch%3Amain)
-[![license](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](https://github.com/nifeos/block_roster#license)
-[![minimum Rust version](https://img.shields.io/badge/rust-1.88%2B-blue.svg)](https://github.com/nifeos/block_roster/blob/main/Cargo.toml)
+[![check](https://github.com/nifeos/block_roster_contract/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/nifeos/block_roster_contract/actions/workflows/ci.yml?query=branch%3Amain)
+[![proofs](https://github.com/nifeos/block_roster_contract/actions/workflows/proofs.yml/badge.svg?branch=main)](https://github.com/nifeos/block_roster_contract/actions/workflows/proofs.yml?query=branch%3Amain)
+[![license](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](https://github.com/nifeos/block_roster_contract#license)
+[![minimum Rust version](https://img.shields.io/badge/rust-1.88%2B-blue.svg)](https://github.com/nifeos/block_roster_contract/blob/main/Cargo.toml)
 
 The page that answers "what block devices are attached": a small, fixed-width, pointer-free layout
 that one party writes once, at wiring time, and that other programs then map read-only and read.
@@ -46,11 +46,11 @@ one of `TRANSPORT_VIRTIO_MEMORY_MAPPED_IO` (0), `TRANSPORT_VIRTIO_PCI` (1) and
 ## EXAMPLES
 
 ```rust
-use block_roster::{Device, Roster, TRANSPORT_VIRTIO_PCI};
+use block_roster_contract::{Device, Roster, TRANSPORT_VIRTIO_PCI};
 
 // The writer lays the roster into a page it owns.
 let mut page = [0u8; 4096];
-block_roster::write(&mut page, &[Device { ordinal: 0, transport: TRANSPORT_VIRTIO_PCI }]).unwrap();
+block_roster_contract::write(&mut page, &[Device { ordinal: 0, transport: TRANSPORT_VIRTIO_PCI }]).unwrap();
 
 // A reader holds the mapped page and borrows from it.
 let roster = Roster::read(&page).unwrap();
