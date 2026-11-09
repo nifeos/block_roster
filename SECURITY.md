@@ -6,7 +6,7 @@ private vulnerability reporting, which this repository has enabled. What you get
 person reading the report, not a triage queue.
 
 Two facts about how this code is written are worth knowing before you read it. Most of it was
-written by AI agents working in parallel lanes, with one human reviewing architecture and
+written by AI agents working in parallel, with one human reviewing the design and the
 outcomes. And every property the crate claims is a Kani harness in the tree, with a falsification
 patch that shows what turns it red; a report that contradicts a harness is also a bug in the
 harness, and both halves are interesting.

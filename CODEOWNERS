@@ -1,4 +1,4 @@
 # Every path is owned by the crate-maintainers team. The
-# apply script creates the team; until it exists this file names a ghost, and review assignment
-# for it is a no-op rather than an error.
+# team must exist in the organization; until it does, this file names a team that is not there,
+# and review assignment for it is a no-op rather than an error.
 * @nifeos/crate-maintainers

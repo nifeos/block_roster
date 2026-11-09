@@ -11,8 +11,8 @@ that one party writes once, at wiring time, and that other programs then map rea
 drift.
 
 This is a shared page, not a message protocol. There is no request, no reply and no server. Holding
-a roster tells a program that a device exists; it does not let the program touch it. Which program
-gets which device's endpoint is decided elsewhere, so a program without the page has nowhere to
+a roster tells a program that a device exists; it does not let the program touch it. Something else decides which program
+gets which device's endpoint, so a program without the page has nowhere to
 look.
 
 ## The contract
@@ -30,7 +30,7 @@ An entry is a `u32` ordinal (which device of this transport, counting from 0) an
 one of `TRANSPORT_VIRTIO_MEMORY_MAPPED_IO` (0), `TRANSPORT_VIRTIO_PCI` (1) and
 `TRANSPORT_NON_VOLATILE_MEMORY_EXPRESS` (2).
 
-- The roster carries no capacity in bytes. Size is learned by asking the device.
+- The roster carries no capacity in bytes. Ask the device for its size.
 - `write` refuses with `TooManyDevices`, and leaves the page untouched, when the page cannot hold
   the header and the devices; a page shorter than the header holds no roster at all.
 - `Roster::read` returns `None` when the page is shorter than the header, when the magic is wrong
@@ -38,7 +38,7 @@ one of `TRANSPORT_VIRTIO_MEMORY_MAPPED_IO` (0), `TRANSPORT_VIRTIO_PCI` (1) and
   reader never indexes past its own mapping.
 - A number the reader does not know as a transport has no name (`Device::transport_name` returns
   `None`); the reader decides what to do with it.
-- The identity is frozen: `INTERFACE_ID` 5, `VERSION` 1 and the magic `blkrosv1`.
+- The identity never changes: `INTERFACE_ID` 5, `VERSION` 1 and the magic `blkrosv1`.
   `INTERFACE_ID` names this interface when a program declares which interfaces it links, and it
   stays 5 for good. The page has one version, which is also the digits of the magic. A layout
   break bumps both in one change, never the id, and an old reader then refuses the page.
