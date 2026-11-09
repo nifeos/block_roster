@@ -1,8 +1,8 @@
 # The stranger cadence
 
 The release's whole claim is that a stranger, given this repository and nothing else, can build
-the crate and run its proofs from the README alone. nife runs that check with a real agent on a
-cadence; this crate owes the same ritual, and the weekly `stranger cadence` job fails when the
+the crate and run its proofs from the README alone. A real agent runs that check on a
+cadence, and the weekly `stranger cadence` job fails when the
 last run is past 28 days.
 
 What a run is:

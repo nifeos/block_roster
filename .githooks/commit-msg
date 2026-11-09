@@ -2,8 +2,6 @@
 # The commit-msg hook: every commit an agent writes ends with a Co-Authored-By: trailer naming its
 # model, because attribution is the rule everywhere this organization writes. Install with:
 #   git config core.hooksPath .githooks
-#
-# Ported from nife's hook of the same name.
 
 set -eu
 

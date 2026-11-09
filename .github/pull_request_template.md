@@ -1,5 +1,5 @@
 # The one rule: nothing lands without a pull request, and a pull request an agent wrote says so in
-# its first line. calef's account is the author GitHub shows, so the disclosure is the record.
+# its first line. the maintainer's account is the author GitHub shows, so the disclosure is the record.
 
 ## What changed, and why
 

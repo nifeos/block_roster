@@ -24,7 +24,6 @@
 //! bytes `blkrosv1`. The id stays 5 for good. A layout break is a new version, which re-mints the
 //! magic in the same change; it is never a new id, and a retired value is never reused.
 
-
 #![no_std]
 
 #[cfg(doctest)]
@@ -61,11 +60,11 @@ pub const HEADER_BYTES: usize = 16;
 /// the way the kernel's own scan counts them.
 pub const TRANSPORT_VIRTIO_MEMORY_MAPPED_IO: u32 = 0;
 
-/// A virtio-blk function on the PCIe bus (the virtio specification's PCI transport).
+/// A virtio-blk function on the `PCIe` bus (the virtio specification's Peripheral Component Interconnect (PCI) transport).
 pub const TRANSPORT_VIRTIO_PCI: u32 = 1;
 
-/// An NVMe controller on the PCIe bus, found by its class code: the ordinal is its position among
-/// NVMe controllers in the kernel's bus walk, so ordinal 0 is the first
+/// An `NVMe` controller on the `PCIe` bus, found by its class code: the ordinal is its position among
+/// `NVMe` controllers in the kernel's bus walk, so ordinal 0 is the first
 /// controller the kernel finds.
 pub const TRANSPORT_NON_VOLATILE_MEMORY_EXPRESS: u32 = 2;
 
@@ -273,7 +272,7 @@ mod tests {
 
     /// The refusal that costs nothing and buys the most: a frame nobody wrote is not a machine
     /// with no disks. Reading it as "zero devices" would be a lie that looks like a fact, and it
-    /// is exactly what a mis-wired mapping produces.
+    /// is exactly what a wrongly wired mapping produces.
     #[test]
     fn a_zeroed_page_is_not_an_empty_roster() {
         let page = [0u8; 4096];
