@@ -1,0 +1,14 @@
+name: weekly
+on:
+  schedule:
+    - cron: '30 6 * * 1'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  weekly:
+    uses: nifeos/crate-workflows/.github/workflows/weekly.yml@ce603f594121b63f0aecef4b453754a3faed09ba
+    with:
+      fuzz: false
+    secrets:
+      SETTINGS_TOKEN: ${{ secrets.SETTINGS_TOKEN }}

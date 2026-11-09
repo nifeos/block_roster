@@ -1,0 +1,4 @@
+# The stable rustfmt subset. nife runs two unstable options (group_imports,
+# imports_granularity) that need nightly; a standalone crate builds on stable, so they are not
+# here, and the standalone job refuses them if they appear. Wrap_comments and
+# format_code_in_doc_comments stay absent for the same reason nife leaves them out.
