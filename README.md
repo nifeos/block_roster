@@ -1,5 +1,10 @@
 # block_roster
 
+[![check](https://github.com/nifeos/block_roster/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/nifeos/block_roster/actions/workflows/ci.yml?query=branch%3Amain)
+[![proofs](https://github.com/nifeos/block_roster/actions/workflows/proofs.yml/badge.svg?branch=main)](https://github.com/nifeos/block_roster/actions/workflows/proofs.yml?query=branch%3Amain)
+[![license](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](https://github.com/nifeos/block_roster#license)
+[![minimum Rust version](https://img.shields.io/badge/rust-1.88%2B-blue.svg)](https://github.com/nifeos/block_roster/blob/main/Cargo.toml)
+
 The page that answers "what block devices are attached": a small, fixed-width, pointer-free layout
 that one party writes once, at wiring time, and that other programs then map read-only and read.
 `no_std`, no dependencies. The writer and the readers share this one definition, so they cannot
