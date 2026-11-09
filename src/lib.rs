@@ -272,7 +272,7 @@ mod tests {
 
     /// The refusal that costs nothing and buys the most: a frame nobody wrote is not a machine
     /// with no disks. Reading it as "zero devices" would be a lie that looks like a fact, and it
-    /// is exactly what a mis-wired mapping produces.
+    /// is exactly what a wrongly wired mapping produces.
     #[test]
     fn a_zeroed_page_is_not_an_empty_roster() {
         let page = [0u8; 4096];
