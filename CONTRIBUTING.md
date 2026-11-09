@@ -20,4 +20,4 @@ account that pushes it is the maintainer's.
 - A proof harness carries a falsification patch, or a reason of at least 200 characters that it
   cannot.
 - A dependency new to the graph holds the pull request for the architect's ruling, and so does a
-  breaking change against the last release. `script/record-ruling` records the answer.
+  breaking change against the last release.
