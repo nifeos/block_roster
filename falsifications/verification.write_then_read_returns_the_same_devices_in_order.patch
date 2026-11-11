@@ -13,12 +13,12 @@ ordinal differs from its transport.
 diff --git a/src/lib.rs b/src/lib.rs
 --- a/src/lib.rs
 +++ b/src/lib.rs
-@@ -175,7 +175,7 @@
-     for (i, d) in devices.iter().enumerate() {
-         let at = HEADER_BYTES + i * ENTRY_BYTES;
-         page[at..at + 4].copy_from_slice(&d.ordinal.to_le_bytes());
--        page[at + 4..at + 8].copy_from_slice(&d.transport.to_le_bytes());
-+        page[at + 4..at + 8].copy_from_slice(&d.ordinal.to_le_bytes());
+@@ -182,7 +182,7 @@
+     for (index, device) in devices.iter().enumerate() {
+         let at = HEADER_BYTES + index * ENTRY_BYTES;
+         page[at..at + 4].copy_from_slice(&device.ordinal.to_le_bytes());
+-        page[at + 4..at + 8].copy_from_slice(&device.transport.to_le_bytes());
++        page[at + 4..at + 8].copy_from_slice(&device.ordinal.to_le_bytes());
      }
      Ok(())
  }

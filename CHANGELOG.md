@@ -15,10 +15,15 @@ sentence beside it.
 - `Roster::devices` returns an `ExactSizeIterator`. The parameter of `Roster::get` is `index`.
 - The three transport constants carry search aliases: `virtio-mmio`, `virtio-pci` and `nvme`.
 - The crate forbids `unsafe` code.
+- The documentation says what a reader may trust: the header checks, and nothing about the
+  ordinal or the transport of an entry.
+- The package carries the crate, its falsification patches, the README, this file and the
+  licenses, and none of the repository's workflows or settings.
 
 ## 0.1.0-pre.1
 
-- First version.
+- First version. The page's identity is `INTERFACE_ID` 5, `VERSION` 1 and the magic `blkrosv1`,
+  whose digits are the version.
 
 ## BUGS
 

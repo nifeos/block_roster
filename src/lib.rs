@@ -22,6 +22,15 @@
 //! starts with [`MAGIC`], and the count fits both the page and the capacity word, which in turn fits
 //! the page. Each refusal is its own [`ReadError`].
 //!
+//! # What a reader may trust
+//!
+//! The header checks are all `read` does. The ordinal and the transport of each entry are numbers
+//! the writer chose, and nothing here bounds them: a reader that indexes a table of its own by
+//! [`Device::ordinal`] bounds the index itself, and a transport it does not know has no name
+//! ([`Device::transport_name`] returns `None`). The page is a snapshot of the moment the writer laid it
+//! out. It does not change while a program holds it, and it says nothing of a device attached
+//! later.
+//!
 //! # Identity
 //!
 //! The page's identity is frozen: [`INTERFACE_ID`] is 5, [`VERSION`] is 1 and [`MAGIC`] is the
@@ -38,15 +47,10 @@ struct ReadmeExample;
 /// `"blkrosv1"` little-endian, at offset 0. A page that does not start with this is not a roster,
 /// and in particular a zeroed frame is not an empty one. The digits are the page layout's version
 /// ([`VERSION`]); a bump re-mints both in one change.
-///
-/// # Amendments
-///
-/// - 2026-10-29: the magic gained the version digits, `"blkrostr"` to `"blkrosv1"`, version 1;
-///   layout unchanged. No migration: every reader and writer was rebuilt together.
 pub const MAGIC: u64 = u64::from_le_bytes(*b"blkrosv1");
 
 /// The page layout's version, the digits [`MAGIC`] carries. A break bumps this and re-mints the
-/// magic in the same change, with a dated amendment above.
+/// magic in the same change, and `CHANGELOG.md` says what the new layout is.
 pub const VERSION: u32 = 1;
 
 /// This interface's identity: 5, naming the block roster page. The number is the crate's to keep
@@ -82,6 +86,9 @@ pub const TRANSPORT_NON_VOLATILE_MEMORY_EXPRESS: u32 = 2;
 /// and there is no method here that turns one into the other. The kernel decides which program gets
 /// which device's endpoint, at wiring time, and nothing a program computes from a roster can change
 /// that.
+///
+/// Both fields are the writer's numbers, unchecked: see "What a reader may trust" in the crate
+/// documentation.
 ///
 /// The derived order sorts by transport and then by ordinal, so a sorted listing groups the
 /// devices by bus. The order of the fields below is that sort order, and it is published behavior:
@@ -138,8 +145,8 @@ pub const fn capacity_of(len: usize) -> usize {
 /// The count and capacity words are `u32`, so a page with room for more than `u32::MAX` entries
 /// records a capacity of `u32::MAX` and takes at most that many devices.
 ///
-/// The kernel is the only caller, and it writes the page before any program can see it. See the
-/// crate header for what that buys the reader.
+/// One writer calls this, once, before any program can see the page. See the crate header for what
+/// that buys the reader.
 ///
 /// # Examples
 ///
@@ -172,10 +179,10 @@ pub fn write(page: &mut [u8], devices: &[Device]) -> Result<(), TooManyDevices> 
     page[..8].copy_from_slice(&MAGIC.to_le_bytes());
     page[8..12].copy_from_slice(&count.to_le_bytes());
     page[12..16].copy_from_slice(&capacity.to_le_bytes());
-    for (i, d) in devices.iter().enumerate() {
-        let at = HEADER_BYTES + i * ENTRY_BYTES;
-        page[at..at + 4].copy_from_slice(&d.ordinal.to_le_bytes());
-        page[at + 4..at + 8].copy_from_slice(&d.transport.to_le_bytes());
+    for (index, device) in devices.iter().enumerate() {
+        let at = HEADER_BYTES + index * ENTRY_BYTES;
+        page[at..at + 4].copy_from_slice(&device.ordinal.to_le_bytes());
+        page[at + 4..at + 8].copy_from_slice(&device.transport.to_le_bytes());
     }
     Ok(())
 }
@@ -304,7 +311,9 @@ impl<'a> Roster<'a> {
 
     /// How many of the devices came off `transport`.
     pub fn count_by_transport(&self, transport: u32) -> usize {
-        self.devices().filter(|d| d.transport == transport).count()
+        self.devices()
+            .filter(|device| device.transport == transport)
+            .count()
     }
 }
 
@@ -337,17 +346,24 @@ mod tests {
     fn a_roster_survives_the_round_trip() {
         let mut page = [0u8; 4096];
         write(&mut page, &sample()).unwrap();
-        let r = Roster::read(&page).unwrap();
-        assert_eq!(r.len(), 4);
-        assert!(!r.is_empty());
-        for (i, want) in sample().iter().enumerate() {
-            assert_eq!(r.get(i).unwrap(), *want);
+        let roster = Roster::read(&page).unwrap();
+        assert_eq!(roster.len(), 4);
+        assert!(!roster.is_empty());
+        for (index, want) in sample().iter().enumerate() {
+            assert_eq!(roster.get(index).unwrap(), *want);
         }
-        assert_eq!(r.get(4), None, "past the end is None, not the next entry");
-        assert_eq!(r.count_by_transport(TRANSPORT_VIRTIO_MEMORY_MAPPED_IO), 3);
-        assert_eq!(r.count_by_transport(TRANSPORT_VIRTIO_PCI), 1);
-        assert_eq!(r.devices().len(), 4);
-        assert!(r.devices().eq(sample()));
+        assert_eq!(
+            roster.get(4),
+            None,
+            "past the end is None, not the next entry"
+        );
+        assert_eq!(
+            roster.count_by_transport(TRANSPORT_VIRTIO_MEMORY_MAPPED_IO),
+            3
+        );
+        assert_eq!(roster.count_by_transport(TRANSPORT_VIRTIO_PCI), 1);
+        assert_eq!(roster.devices().len(), 4);
+        assert!(roster.devices().eq(sample()));
     }
 
     /// The refusal that costs nothing and buys the most: a frame nobody wrote is not a machine
@@ -361,9 +377,9 @@ mod tests {
         // Whereas a roster the kernel deliberately wrote empty reads as empty.
         let mut page = [0u8; 4096];
         write(&mut page, &[]).unwrap();
-        let r = Roster::read(&page).unwrap();
-        assert!(r.is_empty());
-        assert_eq!(r.get(0), None);
+        let roster = Roster::read(&page).unwrap();
+        assert!(roster.is_empty());
+        assert_eq!(roster.get(0), None);
     }
 
     /// A count larger than the page can hold is refused rather than trusted. The reader is a
@@ -444,9 +460,12 @@ mod tests {
             lengths[index] = render(error, &mut messages[index]);
             assert!(lengths[index] > 0);
         }
-        for a in 0..errors.len() {
-            for b in a + 1..errors.len() {
-                assert_ne!(messages[a][..lengths[a]], messages[b][..lengths[b]]);
+        for first in 0..errors.len() {
+            for second in first + 1..errors.len() {
+                assert_ne!(
+                    messages[first][..lengths[first]],
+                    messages[second][..lengths[second]]
+                );
             }
         }
         let mut message = [0u8; 128];
@@ -548,10 +567,13 @@ mod tests {
                 let result = write(&mut page[..len], &devices[..count]);
                 assert_eq!(result.is_ok(), fits, "length {len}, {count} devices");
                 if fits {
-                    assert_eq!(Roster::read(&page[..len]).map(|r| r.len()), Ok(count));
+                    assert_eq!(
+                        Roster::read(&page[..len]).map(|roster| roster.len()),
+                        Ok(count)
+                    );
                 } else {
                     assert!(
-                        page.iter().all(|&b| b == 0xA5),
+                        page.iter().all(|&byte| byte == 0xA5),
                         "a refused page is untouched"
                     );
                 }
@@ -678,10 +700,10 @@ mod verification {
                 "the roster is the count the header names"
             );
             assert_eq!(roster.devices().len(), roster.len());
-            let mut i = 0;
-            while i < roster.len() {
-                assert!(roster.get(i).is_some(), "a counted entry is missing");
-                i += 1;
+            let mut index = 0;
+            while index < roster.len() {
+                assert!(roster.get(index).is_some(), "a counted entry is missing");
+                index += 1;
             }
             assert!(roster.get(roster.len()).is_none());
         }
@@ -716,10 +738,10 @@ mod verification {
 
         let roster = Roster::read(&page).expect("a written page reads");
         assert_eq!(roster.len(), count);
-        let mut i = 0;
-        while i < count {
-            assert_eq!(roster.get(i), Some(devices[i]));
-            i += 1;
+        let mut index = 0;
+        while index < count {
+            assert_eq!(roster.get(index), Some(devices[index]));
+            index += 1;
         }
         assert!(roster.get(count).is_none());
     }

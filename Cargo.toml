@@ -7,8 +7,20 @@ description = "The block-device roster page: which drives are attached, written 
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/nifeos/block_roster_contract"
 readme = "README.md"
-keywords = ["no-std", "block-device", "shared-page"]
-categories = ["no-std", "embedded", "data-structures"]
+documentation = "https://docs.rs/block_roster_contract"
+keywords = ["no-std", "block-device", "storage", "virtio", "nvme"]
+categories = ["no-std", "no-std::no-alloc", "os", "hardware-support"]
+# What the package carries: the crate, its falsification patches and the licenses. The repository's
+# workflows, hooks, process documents and lint settings stay out.
+include = [
+    "/src/**",
+    "/falsifications/**",
+    "/Cargo.toml",
+    "/README.md",
+    "/CHANGELOG.md",
+    "/LICENSE-APACHE",
+    "/LICENSE-MIT",
+]
 publish = false     # not published to crates.io; the maintainers decide any release
 
 # The block-device roster: the read-only page layout that answers "what drives are attached",
