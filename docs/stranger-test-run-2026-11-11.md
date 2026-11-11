@@ -63,5 +63,5 @@ bound in BUGS (a 16-byte header and three 8-byte entries) and the minimum Rust v
   measured the install instructions.
 - The stranger was a subagent with the maintainers' instructions in context, not a separate process
   with nothing loaded.
-- The run recorded the gaps and changed nothing in the README; they stay open until a change
-  closes them.
+- The run recorded the gaps and changed nothing in the README. The README now covers the four
+  gaps above.
