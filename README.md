@@ -73,9 +73,11 @@ assert_eq!(roster.count_by_transport(TRANSPORT_VIRTIO_PCI), 1);
 
 ## What is proven
 
-Three Kani harnesses in `src/lib.rs` prove three things. `Roster::read` is total on any bytes.
-`write` is total on any page length and refuses a page too short for its header. `write` then
-`read` returns the same devices in order. Install Kani and run them as "Building and testing" below describes.
+Five Kani harnesses in `src/lib.rs` prove five things. `Roster::read` is total on any bytes, up to
+three entries (40 bytes). `read` is also total on a whole 4096-byte page with any header, and every
+entry it counts there can be fetched. `capacity_of` never claims more room than a page of any length
+has. `write` is total on any page length up to 40 bytes and refuses a page too short for its header.
+`write` then `read` returns the same devices in order. Install Kani and run them as "Building and testing" below describes.
 
 ## Building and testing
 
@@ -97,9 +99,9 @@ kani-verifier --version 0.68.0`, then `cargo kani setup`. The setup step downloa
 checker, so it needs network access. CI uses version 0.68.0, and another version may verify
 differently.
 
-Then `cargo kani`, from the crate's directory, runs all three harnesses. On an x86_64 Linux desktop
-that takes about a minute and peaks near 1.5 gigabytes of memory. CI runs plain `cargo kani`, with
-no extra flags. To run one harness, give its full path and `--exact`:
+Then `cargo kani`, from the crate's directory, runs all five harnesses. On an x86_64 Linux desktop
+that takes one to two minutes and peaks near 2.5 gigabytes of memory. CI runs plain `cargo kani`,
+with no extra flags. To run one harness, give its full path and `--exact`:
 
 ```sh
 cargo kani --harness verification::write_is_total_on_any_page_length --exact
@@ -118,7 +120,7 @@ A passing run prints several lines that look alarming. All of them are expected:
 - Source paths under `/home/runner/.rustup`, a directory that does not exist on your machine. They
   come from the toolchain Kani ships.
 
-Trust the last line of the run: `Complete - 3 successfully verified harnesses, 0 failures, 3 total.`
+Trust the last line of the run: `Complete - 5 successfully verified harnesses, 0 failures, 5 total.`
 
 ### Running one falsification patch
 
@@ -134,8 +136,10 @@ the assertion that the patch breaks. `git checkout -- src` reverts the patch.
 
 ## BUGS
 
-- The harnesses check a page of up to three entries (40 bytes). A longer page is not
-  machine-checked.
+- `write` is machine-checked on pages of up to three entries (40 bytes) only. Its indexing on a
+  longer page rests on `capacity_of`, which the proofs cover at every length, and on host tests.
+- The 4096-byte `read` harness holds the entries at zero, since no entry's contents decide an index.
+  The 40-byte harness covers arbitrary entry contents.
 
 ## Minimum Rust version
 

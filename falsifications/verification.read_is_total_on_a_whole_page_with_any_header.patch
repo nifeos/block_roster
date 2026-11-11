@@ -1,0 +1,23 @@
+Falsifies `block_roster_contract::read_is_total_on_a_whole_page_with_any_header`.
+
+The defect: `read` takes the room the page has from the capacity word the writer
+left instead of measuring its own mapping. Every check then passes on a header
+whose capacity word and count agree, however far past the page they run, and
+`read` slices entries the mapping does not hold.
+
+Expected to fail: an out-of-bounds slice index in `read`, on a page whose
+header names a capacity and a count of more than 510 entries.
+
+
+diff --git a/src/lib.rs b/src/lib.rs
+--- a/src/lib.rs
++++ b/src/lib.rs
+@@ -269,7 +269,7 @@
+         }
+         let word =
+             |at: usize| u32::from_le_bytes([page[at], page[at + 1], page[at + 2], page[at + 3]]);
+-        let room = capacity_of(page.len());
++        let room = word(12) as usize;
+         let count = word(8) as usize;
+         let capacity = word(12) as usize;
+         if count > room {
