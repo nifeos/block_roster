@@ -1,6 +1,6 @@
 [package]
 name = "block_roster_contract"
-version = "0.1.0"
+version = "0.1.0-pre.1"
 edition = "2024"
 rust-version = "1.88"
 description = "The block-device roster page: which drives are attached, written once by the kernel and read by a program that was granted the mapping"
