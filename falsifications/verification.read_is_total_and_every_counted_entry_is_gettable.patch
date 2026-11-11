@@ -13,7 +13,7 @@ when the accepted page has exactly `count` entries of room.
 diff --git a/src/lib.rs b/src/lib.rs
 --- a/src/lib.rs
 +++ b/src/lib.rs
-@@ -276,7 +276,7 @@
+@@ -283,7 +283,7 @@
          }
          let (entries, _) = page[HEADER_BYTES..].as_chunks::<ENTRY_BYTES>();
          Ok(Roster {

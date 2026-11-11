@@ -15,6 +15,9 @@ a roster tells a program that a device exists; it does not let the program touch
 gets which device's endpoint, so a program without the page has nowhere to
 look.
 
+How a program comes to hold the page, and to whom it declares `INTERFACE_ID`, are the business of
+the system around this crate; the crate fixes the bytes and nothing else.
+
 ## The contract
 
 The page is little-endian:
@@ -23,7 +26,7 @@ The page is little-endian:
 |---|---|
 | `0..8` | `MAGIC`, the ASCII text `blkrosv1` read as a little-endian `u64` |
 | `8..12` | count: how many entries follow |
-| `12..16` | capacity: how many entries this page has room for |
+| `12..16` | capacity: how many entries this page has room for; the reader refuses a count past it |
 | `16..` | entries, `ENTRY_BYTES` (8) each |
 
 An entry is a `u32` ordinal (which device of this transport, counting from 0) and a `u32` transport,
@@ -43,10 +46,14 @@ one of `TRANSPORT_VIRTIO_MEMORY_MAPPED_IO` (0), `TRANSPORT_VIRTIO_PCI` (1) and
   `Roster::devices` knows its length.
 - A number the reader does not know as a transport has no name (`Device::transport_name` returns
   `None`); the reader decides what to do with it.
-- The identity never changes: `INTERFACE_ID` 5, `VERSION` 1 and the magic `blkrosv1`.
-  `INTERFACE_ID` names this interface when a program declares which interfaces it links, and it
-  stays 5 for good. The page has one version, which is also the digits of the magic. A layout
-  break bumps both in one change, never the id, and an old reader then refuses the page.
+- `read` checks the header and nothing else. The ordinal and the transport of each entry are the
+  writer's numbers: a reader that indexes a table of its own by ordinal bounds the index itself.
+  The page is a snapshot of the moment the writer laid it out, and it says nothing of a device
+  attached later.
+- The identity is `INTERFACE_ID` 5, `VERSION` 1 and the magic `blkrosv1`. `INTERFACE_ID` names
+  this interface when a program declares which interfaces it links, and it stays 5 for good. The
+  version changes only with the layout, and it is also the digits of the magic. A layout break
+  bumps both in one change, never the id, and an old reader then refuses the page.
 
 ## EXAMPLES
 
@@ -80,7 +87,7 @@ cargo build --lib --target x86_64-unknown-none   # also aarch64-unknown-none-sof
 ```
 
 Run `rustup target add` once, before the first bare-metal build. Without it, that build stops with
-`can't find crate for core`. The tests run on the host and cover 10 unit tests and 2 documentation
+`can't find crate for core`. The tests run on the host and cover 16 unit tests and 2 documentation
 tests, one of which is the example above.
 
 ### Running the proofs
@@ -132,7 +139,8 @@ the assertion that the patch breaks. `git checkout -- src` reverts the patch.
 
 ## Minimum Rust version
 
-Rust 1.88. To check it, install that toolchain and a bare-metal target, then test and build with it:
+Rust 1.88, the first release with `slice::as_chunks`, which the reader uses. To check it, install
+that toolchain and a bare-metal target, then test and build with it:
 
 ```sh
 rustup toolchain install 1.88 --profile minimal --target x86_64-unknown-none
