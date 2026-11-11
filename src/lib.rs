@@ -18,6 +18,10 @@
 //!   4..8     transport: one of the TRANSPORT_ kinds below
 //! ```
 //!
+//! [`Roster::read`] checks the header before it lends out an entry: the page holds the header, it
+//! starts with [`MAGIC`], and the count fits both the page and the capacity word, which in turn fits
+//! the page. Each refusal is its own [`ReadError`].
+//!
 //! # Identity
 //!
 //! The page's identity is frozen: [`INTERFACE_ID`] is 5, [`VERSION`] is 1 and [`MAGIC`] is the
@@ -25,6 +29,7 @@
 //! magic in the same change; it is never a new id, and a retired value is never reused.
 
 #![no_std]
+#![forbid(unsafe_code)]
 
 #[cfg(doctest)]
 #[doc = include_str!("../README.md")]
@@ -56,13 +61,16 @@ pub const ENTRY_BYTES: usize = 8;
 /// Where the first entry starts: magic, count, capacity.
 pub const HEADER_BYTES: usize = 16;
 
+#[doc(alias = "virtio-mmio")]
 /// A virtio-mmio device: the ordinal is its position among block devices on the mmio bus, counted
 /// the way the kernel's own scan counts them.
 pub const TRANSPORT_VIRTIO_MEMORY_MAPPED_IO: u32 = 0;
 
+#[doc(alias = "virtio-pci")]
 /// A virtio-blk function on the `PCIe` bus (the virtio specification's Peripheral Component Interconnect (PCI) transport).
 pub const TRANSPORT_VIRTIO_PCI: u32 = 1;
 
+#[doc(alias = "nvme")]
 /// An `NVMe` controller on the `PCIe` bus, found by its class code: the ordinal is its position among
 /// `NVMe` controllers in the kernel's bus walk, so ordinal 0 is the first
 /// controller the kernel finds.
@@ -74,13 +82,18 @@ pub const TRANSPORT_NON_VOLATILE_MEMORY_EXPRESS: u32 = 2;
 /// and there is no method here that turns one into the other. The kernel decides which program gets
 /// which device's endpoint, at wiring time, and nothing a program computes from a roster can change
 /// that.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+///
+/// The derived order sorts by transport and then by ordinal, so a sorted listing groups the
+/// devices by bus. The order of the fields below is that sort order, and it is published behavior:
+/// moving a field changes how every caller's sorted listing reads. The page layout does not follow
+/// the field order, since [`write()`] and [`Roster::get`] name each field.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct Device {
-    /// Which block device of this transport, 0-based, in the order the kernel's scan finds them.
-    pub ordinal: u32,
     /// [`TRANSPORT_VIRTIO_MEMORY_MAPPED_IO`], [`TRANSPORT_VIRTIO_PCI`] or
     /// [`TRANSPORT_NON_VOLATILE_MEMORY_EXPRESS`].
     pub transport: u32,
+    /// Which block device of this transport, 0-based, in the order the kernel's scan finds them.
+    pub ordinal: u32,
 }
 
 impl Device {
@@ -96,6 +109,15 @@ impl Device {
             TRANSPORT_VIRTIO_PCI => Some("virtio-pci"),
             TRANSPORT_NON_VOLATILE_MEMORY_EXPRESS => Some("nvme"),
             _ => None,
+        }
+    }
+
+    /// The device one entry of a page holds: the ordinal in its first four bytes, the transport
+    /// in the next four.
+    const fn from_entry(entry: &[u8; ENTRY_BYTES]) -> Device {
+        Device {
+            transport: u32::from_le_bytes([entry[4], entry[5], entry[6], entry[7]]),
+            ordinal: u32::from_le_bytes([entry[0], entry[1], entry[2], entry[3]]),
         }
     }
 }
@@ -165,62 +187,119 @@ pub fn write(page: &mut [u8], devices: &[Device]) -> Result<(), TooManyDevices> 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct TooManyDevices;
 
+impl core::fmt::Display for TooManyDevices {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.write_str("the page has no room for the roster header and these devices")
+    }
+}
+
+impl core::error::Error for TooManyDevices {}
+
+/// Why [`Roster::read`] refused a page. Each refusal points at a different fault, so a reader can
+/// report which one it met without parsing the page itself.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum ReadError {
+    /// The page is shorter than [`HEADER_BYTES`], so it cannot hold even an empty roster: the
+    /// mapping is shorter than the page it stands for.
+    TooShort,
+    /// The page does not start with [`MAGIC`]. A frame nobody wrote, a page of another kind, or a
+    /// roster of another [`VERSION`].
+    NotARoster,
+    /// The count word names more entries than the page has room for: the writer is broken, or
+    /// the mapping is shorter than the page.
+    CountBeyondPage,
+    /// The capacity word names more entries than the page has room for: the mapping is shorter
+    /// than the page the writer laid out.
+    CapacityBeyondPage,
+    /// The count word names more entries than the page's own capacity word: the writer is broken.
+    CountBeyondCapacity,
+}
+
+impl core::fmt::Display for ReadError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.write_str(match self {
+            ReadError::TooShort => "the page is shorter than the roster header",
+            ReadError::NotARoster => "the page does not start with the roster magic",
+            ReadError::CountBeyondPage => "the roster's count runs past the end of the page",
+            ReadError::CapacityBeyondPage => {
+                "the roster's capacity word claims more room than the page has"
+            }
+            ReadError::CountBeyondCapacity => {
+                "the roster's count is larger than its own capacity word"
+            }
+        })
+    }
+}
+
+impl core::error::Error for ReadError {}
+
 /// A roster page a program holds, borrowed rather than copied.
 #[derive(Debug, Clone, Copy)]
 pub struct Roster<'a> {
-    entries: &'a [u8],
-    count: usize,
+    /// The counted entries and nothing past them.
+    entries: &'a [[u8; ENTRY_BYTES]],
 }
 
 impl<'a> Roster<'a> {
-    /// Read a mapped page. `None` if the magic is wrong (which includes a frame nobody wrote) or
-    /// the count runs past what the page holds.
+    /// Read a mapped page, or say why it is not a roster: [`ReadError`] names each refusal.
     ///
-    /// Both refusals matter for the same reason: this page arrives from outside the program, and a
-    /// reader that trusted a count it did not check would index past its own mapping.
-    pub fn read(page: &'a [u8]) -> Option<Roster<'a>> {
+    /// `read` checks the header against the page in this order: the page holds the header
+    /// ([`ReadError::TooShort`]), it starts with [`MAGIC`] ([`ReadError::NotARoster`]), the count
+    /// fits the page ([`ReadError::CountBeyondPage`]), the capacity word fits the page
+    /// ([`ReadError::CapacityBeyondPage`]), and the count fits the capacity word
+    /// ([`ReadError::CountBeyondCapacity`]). A page longer than the capacity word says is
+    /// accepted: a reader may map more than the writer laid out.
+    ///
+    /// Every refusal matters for the same reason: this page arrives from outside the program, and a
+    /// reader that trusted a header it did not check would index past its own mapping.
+    pub fn read(page: &'a [u8]) -> Result<Roster<'a>, ReadError> {
         if page.len() < HEADER_BYTES {
-            return None;
+            return Err(ReadError::TooShort);
         }
-        if u64::from_le_bytes(page[..8].try_into().ok()?) != MAGIC {
-            return None;
+        if page[..8] != MAGIC.to_le_bytes() {
+            return Err(ReadError::NotARoster);
         }
-        let count = u32::from_le_bytes(page[8..12].try_into().ok()?) as usize;
-        if count > capacity_of(page.len()) {
-            return None;
+        let word =
+            |at: usize| u32::from_le_bytes([page[at], page[at + 1], page[at + 2], page[at + 3]]);
+        let room = capacity_of(page.len());
+        let count = word(8) as usize;
+        let capacity = word(12) as usize;
+        if count > room {
+            return Err(ReadError::CountBeyondPage);
         }
-        Some(Roster {
-            entries: &page[HEADER_BYTES..],
-            count,
+        if capacity > room {
+            return Err(ReadError::CapacityBeyondPage);
+        }
+        if count > capacity {
+            return Err(ReadError::CountBeyondCapacity);
+        }
+        let (entries, _) = page[HEADER_BYTES..].as_chunks::<ENTRY_BYTES>();
+        Ok(Roster {
+            entries: &entries[..count],
         })
     }
 
     /// How many devices are attached.
     pub const fn len(&self) -> usize {
-        self.count
+        self.entries.len()
     }
 
     /// Whether the machine has no block devices at all. A real answer, not an error: a diskless
     /// boot is a thing a machine can do.
     pub const fn is_empty(&self) -> bool {
-        self.count == 0
+        self.entries.is_empty()
     }
 
-    /// The `i`-th device, or `None` past the end.
-    pub fn get(&self, i: usize) -> Option<Device> {
-        if i >= self.count {
-            return None;
-        }
-        let at = i * ENTRY_BYTES;
-        Some(Device {
-            ordinal: u32::from_le_bytes(self.entries[at..at + 4].try_into().ok()?),
-            transport: u32::from_le_bytes(self.entries[at + 4..at + 8].try_into().ok()?),
-        })
+    /// The device at `index`, counting from 0, or `None` past the end.
+    pub fn get(&self, index: usize) -> Option<Device> {
+        self.entries.get(index).map(Device::from_entry)
     }
 
-    /// Every device, in the order the kernel found them.
-    pub fn devices(&self) -> impl Iterator<Item = Device> + '_ {
-        (0..self.count).filter_map(|i| self.get(i))
+    /// Every device, in the order the kernel found them. The iterator knows its length, which is
+    /// [`Roster::len`].
+    pub fn devices(&self) -> impl ExactSizeIterator<Item = Device> + '_ {
+        self.entries.iter().map(Device::from_entry)
     }
 
     /// How many of the devices came off `transport`.
@@ -267,7 +346,8 @@ mod tests {
         assert_eq!(r.get(4), None, "past the end is None, not the next entry");
         assert_eq!(r.count_by_transport(TRANSPORT_VIRTIO_MEMORY_MAPPED_IO), 3);
         assert_eq!(r.count_by_transport(TRANSPORT_VIRTIO_PCI), 1);
-        assert_eq!(r.devices().count(), 4);
+        assert_eq!(r.devices().len(), 4);
+        assert!(r.devices().eq(sample()));
     }
 
     /// The refusal that costs nothing and buys the most: a frame nobody wrote is not a machine
@@ -276,7 +356,7 @@ mod tests {
     #[test]
     fn a_zeroed_page_is_not_an_empty_roster() {
         let page = [0u8; 4096];
-        assert!(Roster::read(&page).is_none());
+        assert_eq!(Roster::read(&page).err(), Some(ReadError::NotARoster));
 
         // Whereas a roster the kernel deliberately wrote empty reads as empty.
         let mut page = [0u8; 4096];
@@ -292,12 +372,158 @@ mod tests {
     fn a_lying_count_is_refused() {
         let mut page = [0u8; 64]; // room for six entries
         write(&mut page, &sample()).unwrap();
-        assert!(Roster::read(&page).is_some());
+        assert!(Roster::read(&page).is_ok());
         page[8..12].copy_from_slice(&7u32.to_le_bytes());
-        assert!(Roster::read(&page).is_none());
+        assert_eq!(Roster::read(&page).err(), Some(ReadError::CountBeyondPage));
         // And exactly at capacity is fine, because the boundary is the interesting one.
         page[8..12].copy_from_slice(&6u32.to_le_bytes());
-        assert!(Roster::read(&page).is_some());
+        assert!(Roster::read(&page).is_ok());
+    }
+
+    /// A capacity word larger than the page has room for means the reader holds less of the page
+    /// than the writer laid out, even when the count still fits.
+    #[test]
+    fn a_capacity_word_past_the_page_is_refused() {
+        let mut page = [0u8; 64]; // room for six entries
+        write(&mut page, &sample()).unwrap();
+        page[12..16].copy_from_slice(&7u32.to_le_bytes());
+        assert_eq!(
+            Roster::read(&page).err(),
+            Some(ReadError::CapacityBeyondPage)
+        );
+        // The writer's own page, read through a mapping one entry short of it.
+        write(&mut page, &sample()).unwrap();
+        assert_eq!(
+            Roster::read(&page[..56]).err(),
+            Some(ReadError::CapacityBeyondPage)
+        );
+        page[12..16].copy_from_slice(&6u32.to_le_bytes());
+        assert!(Roster::read(&page).is_ok());
+    }
+
+    /// A count larger than the page's own capacity word came from a broken writer, even when the
+    /// page has room for the entries.
+    #[test]
+    fn a_count_past_the_capacity_word_is_refused() {
+        let mut page = [0u8; 64]; // room for six entries
+        write(&mut page, &sample()).unwrap();
+        page[12..16].copy_from_slice(&3u32.to_le_bytes());
+        assert_eq!(
+            Roster::read(&page).err(),
+            Some(ReadError::CountBeyondCapacity)
+        );
+        page[12..16].copy_from_slice(&4u32.to_le_bytes());
+        assert_eq!(Roster::read(&page).map(|roster| roster.len()), Ok(4));
+    }
+
+    /// A reader may map more than the writer laid out: a capacity word smaller than the room the
+    /// page has is accepted, and the entries past the count are not read.
+    #[test]
+    fn a_page_longer_than_its_capacity_word_reads() {
+        let mut page = [0xA5u8; 64];
+        write(&mut page[..HEADER_BYTES + 4 * ENTRY_BYTES], &sample()).unwrap();
+        let roster = Roster::read(&page).unwrap();
+        assert_eq!(roster.len(), 4);
+        assert_eq!(roster.get(4), None);
+        assert!(roster.devices().eq(sample()));
+    }
+
+    /// Each refusal says something different, so a log line names the fault.
+    #[test]
+    fn every_refusal_has_its_own_message() {
+        let errors = [
+            ReadError::TooShort,
+            ReadError::NotARoster,
+            ReadError::CountBeyondPage,
+            ReadError::CapacityBeyondPage,
+            ReadError::CountBeyondCapacity,
+        ];
+        let mut messages = [[0u8; 128]; 5];
+        let mut lengths = [0usize; 5];
+        for (index, error) in errors.iter().enumerate() {
+            lengths[index] = render(error, &mut messages[index]);
+            assert!(lengths[index] > 0);
+        }
+        for a in 0..errors.len() {
+            for b in a + 1..errors.len() {
+                assert_ne!(messages[a][..lengths[a]], messages[b][..lengths[b]]);
+            }
+        }
+        let mut message = [0u8; 128];
+        assert!(render(&TooManyDevices, &mut message) > 0);
+        fn is_error<E: core::error::Error>(_: &E) {}
+        is_error(&TooManyDevices);
+        is_error(&ReadError::TooShort);
+    }
+
+    /// Writes `value`'s `Display` text into `buffer` and returns its length, with no allocator.
+    fn render(value: &dyn core::fmt::Display, buffer: &mut [u8]) -> usize {
+        struct Cursor<'b> {
+            buffer: &'b mut [u8],
+            used_bytes: usize,
+        }
+        impl core::fmt::Write for Cursor<'_> {
+            fn write_str(&mut self, text: &str) -> core::fmt::Result {
+                let end = self.used_bytes + text.len();
+                self.buffer
+                    .get_mut(self.used_bytes..end)
+                    .ok_or(core::fmt::Error)?
+                    .copy_from_slice(text.as_bytes());
+                self.used_bytes = end;
+                Ok(())
+            }
+        }
+        let mut cursor = Cursor {
+            buffer,
+            used_bytes: 0,
+        };
+        core::fmt::write(&mut cursor, format_args!("{value}")).unwrap();
+        cursor.used_bytes
+    }
+
+    /// The derived order is published behavior: by transport first, then by ordinal, so a sorted
+    /// listing groups the devices by bus. Moving a field of `Device` fails this test.
+    #[test]
+    fn devices_sort_by_transport_then_ordinal() {
+        let mut devices = [
+            Device {
+                transport: TRANSPORT_VIRTIO_PCI,
+                ordinal: 0,
+            },
+            Device {
+                transport: TRANSPORT_VIRTIO_MEMORY_MAPPED_IO,
+                ordinal: 1,
+            },
+            Device {
+                transport: TRANSPORT_NON_VOLATILE_MEMORY_EXPRESS,
+                ordinal: 0,
+            },
+            Device {
+                transport: TRANSPORT_VIRTIO_MEMORY_MAPPED_IO,
+                ordinal: 0,
+            },
+        ];
+        devices.sort();
+        let order = devices.map(|device| (device.transport, device.ordinal));
+        assert_eq!(order, [(0, 0), (0, 1), (1, 0), (2, 0)]);
+    }
+
+    /// Each half of an entry lands in its own field, read from the bytes the layout names.
+    #[test]
+    fn an_entry_reads_its_ordinal_then_its_transport() {
+        let mut page = [0u8; HEADER_BYTES + ENTRY_BYTES];
+        write(
+            &mut page,
+            &[Device {
+                transport: 0,
+                ordinal: 0,
+            }],
+        )
+        .unwrap();
+        page[HEADER_BYTES..].copy_from_slice(&[1, 2, 3, 4, 5, 6, 7, 8]);
+        let device = Roster::read(&page).unwrap().get(0).unwrap();
+        assert_eq!(device.ordinal, 0x0403_0201);
+        assert_eq!(device.transport, 0x0807_0605);
     }
 
     #[test]
@@ -322,7 +548,7 @@ mod tests {
                 let result = write(&mut page[..len], &devices[..count]);
                 assert_eq!(result.is_ok(), fits, "length {len}, {count} devices");
                 if fits {
-                    assert_eq!(Roster::read(&page[..len]).map(|r| r.len()), Some(count));
+                    assert_eq!(Roster::read(&page[..len]).map(|r| r.len()), Ok(count));
                 } else {
                     assert!(
                         page.iter().all(|&b| b == 0xA5),
@@ -413,7 +639,10 @@ mod tests {
         assert_eq!(roster.devices().count(), 0);
         assert_eq!(capacity_of(HEADER_BYTES), 0);
         // One byte shorter really is short.
-        assert_eq!(Roster::read(&page[..HEADER_BYTES - 1]).map(|_| ()), None);
+        assert_eq!(
+            Roster::read(&page[..HEADER_BYTES - 1]).err(),
+            Some(ReadError::TooShort)
+        );
     }
 }
 
@@ -431,16 +660,24 @@ mod verification {
     /// Falsification: replayable `falsifications/verification.read_is_total_and_every_counted_entry_is_gettable.patch`
     /// **`Roster::read` is total on any bytes**: for any page of up to `PAGE` bytes, whatever its
     /// contents and length, `read` neither panics nor indexes out of bounds, and when it accepts the
-    /// page every one of its `len()` entries can be fetched and the one after the last cannot.
+    /// page its `len()` is the count the header names, every one of those entries can be fetched,
+    /// `devices()` yields exactly that many, and the entry after the last cannot be fetched.
     #[kani::proof]
-    #[kani::unwind(6)]
+    #[kani::unwind(9)]
     fn read_is_total_and_every_counted_entry_is_gettable() {
         assert_eq!(PAGE, HEADER_BYTES + 3 * ENTRY_BYTES);
         let bytes: [u8; PAGE] = kani::any();
         let len: usize = kani::any();
         kani::assume(len <= PAGE);
 
-        if let Some(roster) = Roster::read(&bytes[..len]) {
+        if let Ok(roster) = Roster::read(&bytes[..len]) {
+            let count = u32::from_le_bytes([bytes[8], bytes[9], bytes[10], bytes[11]]);
+            assert_eq!(
+                roster.len(),
+                count as usize,
+                "the roster is the count the header names"
+            );
+            assert_eq!(roster.devices().len(), roster.len());
             let mut i = 0;
             while i < roster.len() {
                 assert!(roster.get(i).is_some(), "a counted entry is missing");
@@ -455,7 +692,7 @@ mod verification {
     /// into a page that fits and then `read` returns the same devices in the same order, and no
     /// more.
     #[kani::proof]
-    #[kani::unwind(6)]
+    #[kani::unwind(9)]
     fn write_then_read_returns_the_same_devices_in_order() {
         let devices: [Device; 3] = [
             Device {
@@ -493,7 +730,7 @@ mod verification {
     /// when the page holds the header and the devices, and a page it accepted reads back with that
     /// many devices.
     #[kani::proof]
-    #[kani::unwind(6)]
+    #[kani::unwind(9)]
     fn write_is_total_on_any_page_length() {
         let devices: [Device; 3] = [
             Device {
