@@ -33,9 +33,14 @@ one of `TRANSPORT_VIRTIO_MEMORY_MAPPED_IO` (0), `TRANSPORT_VIRTIO_PCI` (1) and
 - The roster carries no capacity in bytes. Ask the device for its size.
 - `write` refuses with `TooManyDevices`, and leaves the page untouched, when the page cannot hold
   the header and the devices; a page shorter than the header holds no roster at all.
-- `Roster::read` returns `None` when the page is shorter than the header, when the magic is wrong
-  (a zeroed frame is not an empty roster) or when the count runs past what the page holds. A
-  reader never indexes past its own mapping.
+- `Roster::read` refuses a page with a `ReadError` that names the refusal. It is `TooShort` when
+  the page is shorter than the header, and `NotARoster` when the magic is wrong (a zeroed frame is
+  not an empty roster). It is `CountBeyondPage` when the count runs past what the page holds,
+  `CapacityBeyondPage` when the capacity word does, and `CountBeyondCapacity` when the count is
+  larger than the capacity word. A page longer than its capacity word reads, since a reader may map
+  more than the writer laid out. A reader never indexes past its own mapping.
+- `Device` sorts by transport and then by ordinal, so a sorted listing groups the devices by bus.
+  `Roster::devices` knows its length.
 - A number the reader does not know as a transport has no name (`Device::transport_name` returns
   `None`); the reader decides what to do with it.
 - The identity never changes: `INTERFACE_ID` 5, `VERSION` 1 and the magic `blkrosv1`.

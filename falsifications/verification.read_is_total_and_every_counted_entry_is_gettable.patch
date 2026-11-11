@@ -1,25 +1,24 @@
 Falsifies `block_roster_contract::read_is_total_and_every_counted_entry_is_gettable`.
 
-The defect: `Roster::get` bounds its index with `i > self.count` instead of
-`i >= self.count`, the off-by-one a reader writes when it thinks of `count` as a
-last index. The entry one past the last is then fetched: it reads a slot the
-writer never filled (or, on a page with no spare room, indexes past the entries
-slice), so the roster claims a device that is not there.
+The defect: `Roster::read` keeps one entry past the count, `..=count` instead of
+`..count`, the off-by-one a reader writes when it thinks of `count` as a last
+index. The roster then claims a device the writer never counted (a slot it never
+filled), or, on a page with no spare room, slices past the entries it has.
 
-Expected to fail: `assert!(roster.get(roster.len()).is_none())`, on any page the
-header accepts, or an out-of-bounds slice inside `get` when the accepted page has
-exactly `count` entries of room.
+Expected to fail: `assert_eq!(roster.len(), count as usize, ...)`, on any page the
+header accepts with room past its count, or an out-of-bounds slice inside `read`
+when the accepted page has exactly `count` entries of room.
 
 
 diff --git a/src/lib.rs b/src/lib.rs
 --- a/src/lib.rs
 +++ b/src/lib.rs
-@@ -209,7 +209,7 @@
- 
-     /// The `i`-th device, or `None` past the end.
-     pub fn get(&self, i: usize) -> Option<Device> {
--        if i >= self.count {
-+        if i > self.count {
-             return None;
+@@ -276,7 +276,7 @@
          }
-         let at = i * ENTRY_BYTES;
+         let (entries, _) = page[HEADER_BYTES..].as_chunks::<ENTRY_BYTES>();
+         Ok(Roster {
+-            entries: &entries[..count],
++            entries: &entries[..=count],
+         })
+     }
+ 
