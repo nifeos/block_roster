@@ -17,6 +17,8 @@ sentence beside it.
 - The crate forbids `unsafe` code.
 - The documentation says what a reader may trust: the header checks, and nothing about the
   ordinal or the transport of an entry.
+- Two more proofs: `capacity_of` at every page length, and `read` on a whole 4096-byte page with
+  any header.
 - The package carries the crate, its falsification patches, the README, this file and the
   licenses, and none of the repository's workflows or settings.
 

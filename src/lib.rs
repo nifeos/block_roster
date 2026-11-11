@@ -781,4 +781,40 @@ mod verification {
             assert_eq!(roster.len(), count);
         }
     }
+
+    /// Falsification: replayable `falsifications/verification.capacity_of_fits_the_page_for_every_length.patch`
+    /// **`capacity_of` never claims more room than the page has**: for every page length that holds
+    /// the header, the header and `capacity_of(len)` entries fit in `len` bytes, and what is left
+    /// over is too short for one entry more. This is the arithmetic both `write` and `read` bound their indexing by, checked at
+    /// every length rather than up to `PAGE`.
+    #[kani::proof]
+    fn capacity_of_fits_the_page_for_every_length() {
+        let len: usize = kani::any();
+        kani::assume(len >= HEADER_BYTES);
+        let capacity = capacity_of(len);
+        assert!(HEADER_BYTES + capacity * ENTRY_BYTES <= len);
+        assert!(len - HEADER_BYTES - capacity * ENTRY_BYTES < ENTRY_BYTES);
+    }
+
+    /// Falsification: replayable `falsifications/verification.read_is_total_on_a_whole_page_with_any_header.patch`
+    /// **`read` is total on a whole page, whatever its header says**: on a page of 4096 bytes with
+    /// any header bytes, `read` neither panics nor indexes out of bounds, and when it accepts the
+    /// page, any counted entry can be fetched, the one after the last cannot, and `devices()`
+    /// yields `len()` devices. The entries are zeros, since their contents decide no index.
+    #[kani::proof]
+    #[kani::unwind(9)]
+    fn read_is_total_on_a_whole_page_with_any_header() {
+        let mut page = [0u8; 4096];
+        let header: [u8; HEADER_BYTES] = kani::any();
+        page[..HEADER_BYTES].copy_from_slice(&header);
+
+        if let Ok(roster) = Roster::read(&page) {
+            assert!(roster.len() <= capacity_of(page.len()));
+            assert_eq!(roster.devices().len(), roster.len());
+            let index: usize = kani::any();
+            kani::assume(index < roster.len());
+            assert!(roster.get(index).is_some(), "a counted entry is missing");
+            assert!(roster.get(roster.len()).is_none());
+        }
+    }
 }
