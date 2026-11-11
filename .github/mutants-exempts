@@ -3,5 +3,6 @@
 # A line without a reason is refused, and a line naming a survivor that no longer exists is
 # refused too, so this list can only shrink by a diff that says why.
 
-# Mutation census row carried from the source tree, as counts: caught 54, missed 1, timeout 0, unviable 4.
-# The 1 missed mutant(s) are not listed here because the census did not record which; the first weekly mutation run names each, and each goes below as `<file>:<line> # <reason>`.
+# The Kani proofs in `mod verification` are excluded in .cargo/mutants.toml, which says why.
+
+src/lib.rs:105 # `<=` differs only at a page of exactly HEADER_BYTES, where both branches give 0 entries

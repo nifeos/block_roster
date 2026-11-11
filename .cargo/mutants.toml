@@ -1,0 +1,11 @@
+# cargo-mutants configuration, read from the crate root.
+#
+# `mod verification` at the end of src/lib.rs is `#[cfg(kani)]`, so `cargo test` never compiles it:
+# a change to it cannot fail any test, and every mutant of it survives for that reason alone. Kani
+# checks its proofs in CI, and each proof carries a falsification patch under falsifications/ that
+# must make Kani fail. That is the module's mutation testing.
+#
+# The module shares its file with code the tests compile, so a glob cannot exclude it. The pattern
+# matches a mutant whose function path begins with `verification::`, which only that module's
+# functions have; a function moved out of it stops matching and is mutated again.
+exclude_re = ['(replace | in )verification::']
