@@ -9,7 +9,7 @@ repository = "https://github.com/nifeos/block_roster_contract"
 readme = "README.md"
 keywords = ["no-std", "block-device", "shared-page"]
 categories = ["no-std", "embedded", "data-structures"]
-publish = false     # the default; the allowlist lint holds the exception (crates/publish-allowlist.txt)
+publish = false     # not published to crates.io; the maintainers decide any release
 
 # The block-device roster: the read-only page layout that answers "what drives are attached",
 # written once by the kernel and read by whichever program was granted the mapping. Pure logic,
