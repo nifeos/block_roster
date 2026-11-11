@@ -19,6 +19,6 @@ Result of that run: the stranger reached a passing build, 10 unit tests and 2 do
 the library on all three bare-metal targets, and all three Kani proofs in about a minute, from the
 README alone. Rust 1.88, the stated minimum, passes the tests too. Kani, the toolchains and the
 targets were already installed, so the run could not show whether the install steps work. It found
-three gaps, none of which stopped it: the bare-metal line never says to add the targets, a passing
-`cargo kani` prints warnings the README does not call expected, and the README never mentions the
-falsification patches. The full record is in [the run appendix](stranger-test-run-2026-11-11.md).
+four gaps, none of which stopped it: the bare-metal line never says to add the targets, a passing
+`cargo kani` prints warnings the README does not call expected, the README never mentions the
+falsification patches, and it says to run the proofs a section before it says how to install Kani. The full record is in [the run appendix](stranger-test-run-2026-11-11.md).
