@@ -14,7 +14,7 @@ could not measure.
 - It was not a clean stranger. Its context held the maintainers' workspace instructions and memory
   from turn zero, so it knew this organization's conventions before it opened the README. Treat
   every "the README was enough" below as weaker evidence than a finding.
-- The machine was provisioned: stable Rust 1.99.1, a 1.88 toolchain, the three bare-metal targets,
+- The machine had stable Rust 1.99.1, a 1.88 toolchain, the three bare-metal targets,
   and Kani 0.68.0 with its setup done.
 
 ## Result
@@ -30,7 +30,7 @@ could not measure.
 
 ## Where the README was not enough
 
-1. **The bare-metal build line assumes the targets are installed.** The README gives
+1. **The bare-metal build line assumes the reader has the targets.** The README gives
    `cargo build --lib --target x86_64-unknown-none` and names the other two targets, but never says
    `rustup target add`. On this machine every toolchain at 1.88 or later already had them, so the
    stranger reproduced the failure on 1.85 with `--ignore-rust-version`:
@@ -59,8 +59,8 @@ bound in BUGS (a 16-byte header and three 8-byte entries) and the minimum Rust v
 
 ## Limits of this run
 
-- Kani, `cargo kani setup`, the 1.88 toolchain and the targets were already installed, so the
-  install instructions are unmeasured.
+- The machine already had Kani, its setup, the 1.88 toolchain and the targets, so nothing
+  measured the install instructions.
 - The stranger was a subagent with the maintainers' instructions in context, not a separate process
   with nothing loaded.
 - The run recorded the gaps and changed nothing in the README; they stay open until a change
