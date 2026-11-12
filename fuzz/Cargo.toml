@@ -1,0 +1,33 @@
+# The cargo-fuzz targets, in a workspace of their own so that `cargo build` and `cargo test` at the
+# root never build them. They need nightly: `cargo +nightly fuzz run <target>`.
+
+[package]
+name = "block_roster_contract-fuzz"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+
+[dependencies.block_roster_contract]
+path = ".."
+
+[[bin]]
+name = "block_roster_read"
+path = "fuzz_targets/block_roster_read.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "block_roster_write"
+path = "fuzz_targets/block_roster_write.rs"
+test = false
+doc = false
+bench = false
+
+[workspace]
